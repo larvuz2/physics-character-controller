@@ -15,6 +15,8 @@ export class CharacterController {
             moveSpeed: 5.0,
             jumpForce: 10.0,
             jumpCooldown: 0.3,
+            rotationSpeed: 5.0,
+            airControl: 0.3, // Reduced control while in air
             ...options
         };
 
@@ -24,7 +26,10 @@ export class CharacterController {
             isJumping: false,
             jumpCooldownTimer: 0,
             velocity: { x: 0, y: 0, z: 0 },
-            position: { x: 0, y: 1, z: 0 } // Fallback position
+            position: { x: 0, y: 1, z: 0 }, // Fallback position
+            rotation: { x: 0, y: 0, z: 0 }, // Character rotation
+            direction: { x: 0, z: -1 }, // Forward direction
+            movementDirection: { x: 0, z: 0 } // Current movement direction
         };
 
         // Flag to track if we're using fallback movement
@@ -92,6 +97,13 @@ export class CharacterController {
                 z: currentVelocity.z
             };
 
+            // Get input direction
+            const inputDirection = input.getMovementDirection();
+            this.state.movementDirection = { ...inputDirection };
+            
+            // Update character rotation based on movement direction
+            this.updateRotation(inputDirection, deltaTime);
+
             // Handle movement
             this.handleMovement(input, deltaTime);
 
@@ -109,13 +121,52 @@ export class CharacterController {
     }
 
     /**
+     * Update character rotation based on movement direction
+     * @param {Object} inputDirection - Input movement direction
+     * @param {number} deltaTime - Time since last update
+     */
+    updateRotation(inputDirection, deltaTime) {
+        // Only update rotation if we're actually moving
+        if (inputDirection.x !== 0 || inputDirection.z !== 0) {
+            // Calculate target rotation angle based on movement direction
+            const targetAngle = Math.atan2(inputDirection.x, inputDirection.z);
+            
+            // Current rotation angle
+            let currentAngle = this.state.rotation.y;
+            
+            // Normalize angles to [-PI, PI]
+            while (currentAngle > Math.PI) currentAngle -= Math.PI * 2;
+            while (currentAngle < -Math.PI) currentAngle += Math.PI * 2;
+            
+            // Calculate shortest rotation path
+            let angleDiff = targetAngle - currentAngle;
+            if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            if (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            
+            // Apply rotation with smoothing
+            const rotationAmount = angleDiff * this.options.rotationSpeed * deltaTime;
+            this.state.rotation.y += rotationAmount;
+            
+            // Update direction vector based on rotation
+            this.state.direction = {
+                x: Math.sin(this.state.rotation.y),
+                z: Math.cos(this.state.rotation.y)
+            };
+        }
+    }
+
+    /**
      * Update character using fallback movement system
      * @param {Object} input - Input handler
      * @param {number} deltaTime - Time since last update
      */
     updateFallbackMovement(input, deltaTime) {
         // Get movement direction from input
-        const direction = input.getMovementDirection();
+        const inputDirection = input.getMovementDirection();
+        this.state.movementDirection = { ...inputDirection };
+        
+        // Update character rotation based on movement direction
+        this.updateRotation(inputDirection, deltaTime);
         
         // Simple gravity simulation
         if (!this.state.isGrounded) {
@@ -142,10 +193,27 @@ export class CharacterController {
             this.state.jumpCooldownTimer = this.options.jumpCooldown;
         }
         
-        // Calculate movement velocity
-        const moveSpeed = this.options.moveSpeed * deltaTime;
-        this.state.velocity.x = direction.x * this.options.moveSpeed;
-        this.state.velocity.z = direction.z * this.options.moveSpeed;
+        // Calculate movement velocity based on character's forward direction
+        if (inputDirection.x !== 0 || inputDirection.z !== 0) {
+            // Calculate movement in character's local space
+            const moveSpeed = this.options.moveSpeed * (this.state.isGrounded ? 1.0 : this.options.airControl);
+            
+            // Apply movement in the direction the character is facing
+            this.state.velocity.x = this.state.direction.x * inputDirection.z * moveSpeed;
+            this.state.velocity.z = this.state.direction.z * inputDirection.z * moveSpeed;
+            
+            // Add strafing (left/right movement perpendicular to forward direction)
+            this.state.velocity.x += -this.state.direction.z * inputDirection.x * moveSpeed;
+            this.state.velocity.z += this.state.direction.x * inputDirection.x * moveSpeed;
+        } else {
+            // Slow down when no input
+            this.state.velocity.x *= 0.9;
+            this.state.velocity.z *= 0.9;
+            
+            // Stop completely if very slow
+            if (Math.abs(this.state.velocity.x) < 0.01) this.state.velocity.x = 0;
+            if (Math.abs(this.state.velocity.z) < 0.01) this.state.velocity.z = 0;
+        }
         
         // Update position based on velocity
         this.state.position.x += this.state.velocity.x * deltaTime;
@@ -169,14 +237,21 @@ export class CharacterController {
     handleMovement(input, deltaTime) {
         try {
             // Get movement direction from input
-            const direction = input.getMovementDirection();
-
-            // Calculate target velocity
-            const targetVelocity = {
-                x: direction.x * this.options.moveSpeed,
-                y: this.state.velocity.y, // Preserve vertical velocity
-                z: direction.z * this.options.moveSpeed
-            };
+            const inputDirection = input.getMovementDirection();
+            
+            // Calculate movement in character's local space
+            const moveSpeed = this.options.moveSpeed * (this.state.isGrounded ? 1.0 : this.options.airControl);
+            let targetVelocity = { x: 0, y: this.state.velocity.y, z: 0 };
+            
+            if (inputDirection.x !== 0 || inputDirection.z !== 0) {
+                // Apply movement in the direction the character is facing
+                targetVelocity.x = this.state.direction.x * inputDirection.z * moveSpeed;
+                targetVelocity.z = this.state.direction.z * inputDirection.z * moveSpeed;
+                
+                // Add strafing (left/right movement perpendicular to forward direction)
+                targetVelocity.x += -this.state.direction.z * inputDirection.x * moveSpeed;
+                targetVelocity.z += this.state.direction.x * inputDirection.x * moveSpeed;
+            }
 
             // Apply the velocity to the character
             this.physics.setBodyVelocity(this.character.body, targetVelocity);
@@ -238,6 +313,30 @@ export class CharacterController {
             this.usingFallback = true;
             return { ...this.state.position };
         }
+    }
+
+    /**
+     * Get the character's current rotation
+     * @returns {Object} - Rotation as {x, y, z}
+     */
+    getRotation() {
+        return { ...this.state.rotation };
+    }
+
+    /**
+     * Get the character's current direction
+     * @returns {Object} - Direction as {x, z}
+     */
+    getDirection() {
+        return { ...this.state.direction };
+    }
+
+    /**
+     * Get the character's current movement direction
+     * @returns {Object} - Movement direction as {x, z}
+     */
+    getMovementDirection() {
+        return { ...this.state.movementDirection };
     }
 
     /**
