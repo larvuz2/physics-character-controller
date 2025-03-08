@@ -112,15 +112,65 @@ export class PhysicsWorld {
 
         try {
             // Create a dynamic rigid body for the character
-            const characterBodyDesc = RAPIER.RigidBodyDesc.dynamic()
-                .setTranslation(position.x, position.y, position.z)
-                // Lock rotations to prevent the character from falling over
-                .setCanRotate(false);
+            let characterBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+                .setTranslation(position.x, position.y, position.z);
+            
+            // Try to lock rotations - handle API differences between Rapier versions
+            try {
+                // Try the setCanRotate method (newer versions)
+                if (typeof characterBodyDesc.setCanRotate === 'function') {
+                    characterBodyDesc = characterBodyDesc.setCanRotate(false);
+                } 
+                // Try the lockRotations method (some versions)
+                else if (typeof characterBodyDesc.lockRotations === 'function') {
+                    characterBodyDesc = characterBodyDesc.lockRotations(true);
+                }
+                // Try setting rotation locked flag directly (older versions)
+                else if (characterBodyDesc.rotationsEnabled !== undefined) {
+                    characterBodyDesc.rotationsEnabled = false;
+                }
+            } catch (rotError) {
+                console.warn('Could not lock character rotations:', rotError);
+            }
             
             const characterBody = this.world.createRigidBody(characterBodyDesc);
+            
+            // Try to lock rotations directly on the body if descriptor methods failed
+            try {
+                if (typeof characterBody.lockRotations === 'function') {
+                    characterBody.lockRotations(true);
+                } else if (characterBody.setRotationLocked && typeof characterBody.setRotationLocked === 'function') {
+                    characterBody.setRotationLocked(true);
+                }
+            } catch (rotError) {
+                console.warn('Could not lock character body rotations:', rotError);
+            }
 
             // Create a capsule collider
-            const characterColliderDesc = RAPIER.ColliderDesc.capsule(height / 2, radius);
+            let characterColliderDesc;
+            try {
+                // Try capsule method (newer versions)
+                if (typeof RAPIER.ColliderDesc.capsule === 'function') {
+                    characterColliderDesc = RAPIER.ColliderDesc.capsule(height / 2, radius);
+                } 
+                // Try capsuleZ method (some versions)
+                else if (typeof RAPIER.ColliderDesc.capsuleZ === 'function') {
+                    characterColliderDesc = RAPIER.ColliderDesc.capsuleZ(height / 2, radius);
+                }
+                // Try cylinder as fallback
+                else if (typeof RAPIER.ColliderDesc.cylinder === 'function') {
+                    characterColliderDesc = RAPIER.ColliderDesc.cylinder(height / 2, radius);
+                }
+                // If all else fails, use a cuboid
+                else {
+                    characterColliderDesc = RAPIER.ColliderDesc.cuboid(radius, height / 2 + radius, radius);
+                }
+            } catch (colliderError) {
+                console.error('Failed to create character collider descriptor:', colliderError);
+                // Fallback to cuboid
+                characterColliderDesc = RAPIER.ColliderDesc.cuboid(radius, height / 2 + radius, radius);
+            }
+            
             const characterCollider = this.world.createCollider(characterColliderDesc, characterBody);
 
             // Store the body in our map
