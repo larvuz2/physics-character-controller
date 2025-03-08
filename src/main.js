@@ -25,6 +25,46 @@ class Application {
 
         // Error state
         this.hasError = false;
+        this.usingFallback = false;
+        
+        // Debug info
+        this.debugElement = null;
+        this.setupDebugInfo();
+    }
+    
+    /**
+     * Set up debug info display
+     */
+    setupDebugInfo() {
+        this.debugElement = document.createElement('div');
+        this.debugElement.style.position = 'absolute';
+        this.debugElement.style.bottom = '10px';
+        this.debugElement.style.right = '10px';
+        this.debugElement.style.color = 'white';
+        this.debugElement.style.fontFamily = 'monospace';
+        this.debugElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        this.debugElement.style.padding = '10px';
+        this.debugElement.style.borderRadius = '5px';
+        this.debugElement.style.fontSize = '12px';
+        document.body.appendChild(this.debugElement);
+    }
+    
+    /**
+     * Update debug info
+     */
+    updateDebugInfo() {
+        if (!this.debugElement || !this.character) return;
+        
+        const position = this.character.getPosition();
+        const state = this.character.getState();
+        
+        this.debugElement.innerHTML = `
+            Position: X=${position.x.toFixed(2)}, Y=${position.y.toFixed(2)}, Z=${position.z.toFixed(2)}<br>
+            Grounded: ${state.isGrounded}<br>
+            Jumping: ${state.isJumping}<br>
+            Mode: ${this.usingFallback ? 'Fallback' : 'Physics'}<br>
+            FPS: ${(1 / (this.deltaTime || 0.016)).toFixed(0)}
+        `;
     }
     
     /**
@@ -45,25 +85,47 @@ class Application {
             this.character = new CharacterController(this.physics);
             this.characterMesh = this.scene.createCharacter(0.5, 1.0);
             
+            // Check if we're using fallback mode
+            this.usingFallback = this.character.usingFallback;
+            
+            if (this.usingFallback) {
+                console.warn('Using fallback movement system');
+                this.scene.showError('Using fallback movement system. Physics simulation disabled.');
+            }
+            
             // Start the game loop
             this.isRunning = true;
             this.lastTime = performance.now();
             requestAnimationFrame(this.gameLoop.bind(this));
             
             console.log('Application initialized');
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loading');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
         } catch (error) {
             console.error('Failed to initialize application:', error);
             this.hasError = true;
-            this.scene.showError('Failed to initialize physics. This may be due to WebAssembly support issues in your browser. Check console for details.');
+            this.usingFallback = true;
+            this.scene.showError('Failed to initialize physics. Using fallback movement system.');
             
             // Still create visual elements for display
             this.groundMesh = this.scene.createGround(50);
+            this.character = new CharacterController(this.physics);
             this.characterMesh = this.scene.createCharacter(0.5, 1.0);
             
-            // Start a simplified render loop
+            // Start a simplified game loop
             this.isRunning = true;
             this.lastTime = performance.now();
-            requestAnimationFrame(this.renderLoop.bind(this));
+            requestAnimationFrame(this.gameLoop.bind(this));
+            
+            // Hide loading screen
+            const loadingScreen = document.getElementById('loading');
+            if (loadingScreen) {
+                loadingScreen.style.display = 'none';
+            }
         }
     }
     
@@ -76,21 +138,31 @@ class Application {
         
         try {
             // Calculate delta time in seconds
-            const deltaTime = (currentTime - this.lastTime) / 1000;
+            this.deltaTime = (currentTime - this.lastTime) / 1000;
             this.lastTime = currentTime;
             
-            // Update physics
-            this.physics.step(deltaTime);
+            // Limit delta time to prevent large jumps
+            if (this.deltaTime > 0.1) this.deltaTime = 0.1;
+            
+            // Update physics if not using fallback
+            if (!this.usingFallback) {
+                this.physics.step(this.deltaTime);
+            }
             
             // Update character
-            this.character.update(this.input, deltaTime);
+            if (this.character) {
+                this.character.update(this.input, this.deltaTime);
+                
+                // Update character mesh position
+                const characterPosition = this.character.getPosition();
+                this.scene.updateMeshPosition(this.characterMesh, characterPosition);
+                
+                // Update camera to follow character
+                this.scene.updateCameraTarget(characterPosition);
+            }
             
-            // Update character mesh position
-            const characterPosition = this.character.getPosition();
-            this.scene.updateMeshPosition(this.characterMesh, characterPosition);
-            
-            // Update camera to follow character
-            this.scene.updateCameraTarget(characterPosition);
+            // Update debug info
+            this.updateDebugInfo();
             
             // Render the scene
             this.scene.render();
@@ -100,37 +172,11 @@ class Application {
         } catch (error) {
             console.error('Error in game loop:', error);
             this.hasError = true;
-            this.scene.showError('An error occurred during the game loop. Switching to simplified rendering.');
+            this.usingFallback = true;
+            this.scene.showError('An error occurred during the game loop. Using fallback movement system.');
             
-            // Switch to simplified render loop
-            requestAnimationFrame(this.renderLoop.bind(this));
-        }
-    }
-
-    /**
-     * Simplified render loop for when physics fails
-     * @param {number} currentTime - Current timestamp
-     */
-    renderLoop(currentTime) {
-        if (!this.isRunning) return;
-        
-        try {
-            // Calculate delta time in seconds
-            const deltaTime = (currentTime - this.lastTime) / 1000;
-            this.lastTime = currentTime;
-            
-            // Simple camera rotation
-            if (this.scene.controls) {
-                this.scene.controls.update();
-            }
-            
-            // Render the scene
-            this.scene.render();
-            
-            // Continue the render loop
-            requestAnimationFrame(this.renderLoop.bind(this));
-        } catch (error) {
-            console.error('Error in render loop:', error);
+            // Switch to simplified game loop
+            requestAnimationFrame(this.gameLoop.bind(this));
         }
     }
 }
@@ -146,8 +192,15 @@ app.init().catch(error => {
             <h2>Application Error</h2>
             <p>Failed to initialize the application. This may be due to WebAssembly support issues in your browser.</p>
             <p>Error: ${error.message || 'Unknown error'}</p>
+            <p>You can still try to use the application with reduced functionality.</p>
         </div>
     `;
+    
+    // Hide loading screen
+    const loadingScreen = document.getElementById('loading');
+    if (loadingScreen) {
+        loadingScreen.style.display = 'none';
+    }
 });
 
 // Display controls info in console
