@@ -68,11 +68,23 @@ class Application {
     }
     
     /**
+     * Update status display
+     * @param {string} message - Status message
+     * @param {boolean} isError - Whether this is an error status
+     */
+    updateStatus(message, isError = false) {
+        if (window.updateStatus) {
+            window.updateStatus(message, isError);
+        }
+    }
+    
+    /**
      * Initialize the application
      */
     async init() {
         try {
             console.log('Initializing application...');
+            this.updateStatus('Initializing...');
             
             // Initialize physics
             await this.physics.init();
@@ -91,6 +103,9 @@ class Application {
             if (this.usingFallback) {
                 console.warn('Using fallback movement system');
                 this.scene.showError('Using fallback movement system. Physics simulation disabled.');
+                this.updateStatus('Using Fallback Movement', true);
+            } else {
+                this.updateStatus('Physics Initialized');
             }
             
             // Start the game loop
@@ -110,6 +125,7 @@ class Application {
             this.hasError = true;
             this.usingFallback = true;
             this.scene.showError('Failed to initialize physics. Using fallback movement system.');
+            this.updateStatus('Using Fallback Movement', true);
             
             // Still create visual elements for display
             this.groundMesh = this.scene.createGround(50);
@@ -151,6 +167,16 @@ class Application {
             
             // Update character
             if (this.character) {
+                // Check if fallback status changed
+                if (this.usingFallback !== this.character.usingFallback) {
+                    this.usingFallback = this.character.usingFallback;
+                    if (this.usingFallback) {
+                        console.warn('Switched to fallback movement system');
+                        this.scene.showError('Switched to fallback movement system');
+                        this.updateStatus('Using Fallback Movement', true);
+                    }
+                }
+                
                 this.character.update(this.input, this.deltaTime);
                 
                 // Update character mesh position
@@ -174,6 +200,7 @@ class Application {
             this.hasError = true;
             this.usingFallback = true;
             this.scene.showError('An error occurred during the game loop. Using fallback movement system.');
+            this.updateStatus('Error - Using Fallback', true);
             
             // Switch to simplified game loop
             requestAnimationFrame(this.gameLoop.bind(this));
@@ -185,6 +212,11 @@ class Application {
 const app = new Application();
 app.init().catch(error => {
     console.error('Unhandled error during initialization:', error);
+    
+    if (window.updateStatus) {
+        window.updateStatus('Critical Error', true);
+    }
+    
     document.body.innerHTML += `
         <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
                     background-color: rgba(255, 0, 0, 0.8); color: white; padding: 20px; 
@@ -193,6 +225,7 @@ app.init().catch(error => {
             <p>Failed to initialize the application. This may be due to WebAssembly support issues in your browser.</p>
             <p>Error: ${error.message || 'Unknown error'}</p>
             <p>You can still try to use the application with reduced functionality.</p>
+            <button onclick="this.parentElement.style.display='none';" style="padding: 10px; margin-top: 10px; cursor: pointer;">Continue Anyway</button>
         </div>
     `;
     
