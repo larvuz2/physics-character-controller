@@ -43,8 +43,38 @@ export class SceneManager {
         
         // Object mappings
         this.objects = new Map();
+
+        // Add error message display
+        this.setupErrorDisplay();
     }
     
+    /**
+     * Set up error display element
+     */
+    setupErrorDisplay() {
+        this.errorDisplay = document.createElement('div');
+        this.errorDisplay.style.position = 'absolute';
+        this.errorDisplay.style.bottom = '10px';
+        this.errorDisplay.style.left = '10px';
+        this.errorDisplay.style.color = 'white';
+        this.errorDisplay.style.fontFamily = 'monospace';
+        this.errorDisplay.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+        this.errorDisplay.style.padding = '10px';
+        this.errorDisplay.style.borderRadius = '5px';
+        this.errorDisplay.style.maxWidth = '80%';
+        this.errorDisplay.style.display = 'none';
+        document.body.appendChild(this.errorDisplay);
+    }
+
+    /**
+     * Display an error message
+     * @param {string} message - Error message to display
+     */
+    showError(message) {
+        this.errorDisplay.textContent = message;
+        this.errorDisplay.style.display = 'block';
+    }
+
     /**
      * Set up scene lighting
      */
@@ -86,19 +116,25 @@ export class SceneManager {
      * @returns {THREE.Mesh} - Ground mesh
      */
     createGround(size = 50) {
-        const geometry = new THREE.PlaneGeometry(size, size);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x999999,
-            roughness: 0.8,
-            metalness: 0.2
-        });
-        
-        const ground = new THREE.Mesh(geometry, material);
-        ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
-        ground.receiveShadow = true;
-        
-        this.scene.add(ground);
-        return ground;
+        try {
+            const geometry = new THREE.PlaneGeometry(size, size);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x999999,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            
+            const ground = new THREE.Mesh(geometry, material);
+            ground.rotation.x = -Math.PI / 2; // Rotate to be horizontal
+            ground.receiveShadow = true;
+            
+            this.scene.add(ground);
+            return ground;
+        } catch (error) {
+            console.error('Failed to create ground mesh:', error);
+            this.showError('Failed to create ground mesh. Check console for details.');
+            return new THREE.Object3D(); // Return empty object as fallback
+        }
     }
     
     /**
@@ -108,25 +144,31 @@ export class SceneManager {
      * @returns {THREE.Group} - Character mesh group
      */
     createCharacter(radius = 0.5, height = 1.0) {
-        const group = new THREE.Group();
-        
-        // Create capsule body
-        const geometry = new THREE.CapsuleGeometry(radius, height, 8, 16);
-        const material = new THREE.MeshStandardMaterial({
-            color: 0x3498db,
-            roughness: 0.7,
-            metalness: 0.3
-        });
-        
-        const capsule = new THREE.Mesh(geometry, material);
-        capsule.castShadow = true;
-        capsule.receiveShadow = true;
-        
-        group.add(capsule);
-        
-        // Add character to scene
-        this.scene.add(group);
-        return group;
+        try {
+            const group = new THREE.Group();
+            
+            // Create capsule body
+            const geometry = new THREE.CapsuleGeometry(radius, height, 8, 16);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x3498db,
+                roughness: 0.7,
+                metalness: 0.3
+            });
+            
+            const capsule = new THREE.Mesh(geometry, material);
+            capsule.castShadow = true;
+            capsule.receiveShadow = true;
+            
+            group.add(capsule);
+            
+            // Add character to scene
+            this.scene.add(group);
+            return group;
+        } catch (error) {
+            console.error('Failed to create character mesh:', error);
+            this.showError('Failed to create character mesh. Check console for details.');
+            return new THREE.Object3D(); // Return empty object as fallback
+        }
     }
     
     /**
@@ -137,7 +179,11 @@ export class SceneManager {
     updateMeshPosition(mesh, position) {
         if (!mesh) return;
         
-        mesh.position.set(position.x, position.y, position.z);
+        try {
+            mesh.position.set(position.x, position.y, position.z);
+        } catch (error) {
+            console.error('Failed to update mesh position:', error);
+        }
     }
     
     /**
@@ -145,15 +191,23 @@ export class SceneManager {
      * @param {Object} position - Target position as {x, y, z}
      */
     updateCameraTarget(position) {
-        // Update orbit controls target
-        this.controls.target.set(position.x, position.y, position.z);
-        this.controls.update();
+        try {
+            // Update orbit controls target
+            this.controls.target.set(position.x, position.y, position.z);
+            this.controls.update();
+        } catch (error) {
+            console.error('Failed to update camera target:', error);
+        }
     }
     
     /**
      * Render the scene
      */
     render() {
-        this.renderer.render(this.scene, this.camera);
+        try {
+            this.renderer.render(this.scene, this.camera);
+        } catch (error) {
+            console.error('Failed to render scene:', error);
+        }
     }
 }
