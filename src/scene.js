@@ -31,6 +31,20 @@ export class SceneManager {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         
+        // Third-person camera settings
+        this.thirdPersonCamera = {
+            enabled: true,
+            distance: 5,
+            height: 2,
+            rotationAngle: 0,
+            smoothing: 0.1,
+            target: new THREE.Vector3(0, 0, 0),
+            offset: new THREE.Vector3(0, 2, 0)
+        };
+        
+        // Camera mode (orbit or third-person)
+        this.cameraMode = 'third-person'; // 'orbit' or 'third-person'
+        
         // Add lights
         this.setupLights();
         
@@ -46,6 +60,54 @@ export class SceneManager {
 
         // Add error message display
         this.setupErrorDisplay();
+        
+        // Add camera mode toggle
+        this.setupCameraModeToggle();
+    }
+    
+    /**
+     * Set up camera mode toggle
+     */
+    setupCameraModeToggle() {
+        // Add key listener for camera mode toggle
+        window.addEventListener('keydown', (event) => {
+            if (event.code === 'KeyC') {
+                this.toggleCameraMode();
+            }
+        });
+        
+        // Add camera mode info to the UI
+        const cameraInfo = document.createElement('div');
+        cameraInfo.style.position = 'absolute';
+        cameraInfo.style.bottom = '10px';
+        cameraInfo.style.left = '10px';
+        cameraInfo.style.color = 'white';
+        cameraInfo.style.fontFamily = 'monospace';
+        cameraInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        cameraInfo.style.padding = '10px';
+        cameraInfo.style.borderRadius = '5px';
+        cameraInfo.textContent = 'Press C to toggle camera mode';
+        document.body.appendChild(cameraInfo);
+    }
+    
+    /**
+     * Toggle between orbit and third-person camera modes
+     */
+    toggleCameraMode() {
+        this.cameraMode = this.cameraMode === 'orbit' ? 'third-person' : 'orbit';
+        
+        // Enable/disable orbit controls based on mode
+        if (this.cameraMode === 'orbit') {
+            this.controls.enabled = true;
+        } else {
+            // Save current camera position before switching to third-person
+            const currentPos = this.camera.position.clone();
+            this.thirdPersonCamera.distance = currentPos.distanceTo(this.controls.target);
+            this.thirdPersonCamera.height = currentPos.y - this.controls.target.y;
+            this.controls.enabled = false;
+        }
+        
+        console.log(`Camera mode switched to: ${this.cameraMode}`);
     }
     
     /**
@@ -161,6 +223,16 @@ export class SceneManager {
             
             group.add(capsule);
             
+            // Add direction indicator (front of character)
+            const indicatorGeometry = new THREE.ConeGeometry(0.2, 0.5, 8);
+            const indicatorMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+            indicator.position.set(0, 0, -radius - 0.3);
+            indicator.rotation.x = Math.PI / 2;
+            indicator.castShadow = true;
+            
+            group.add(indicator);
+            
             // Add character to scene
             this.scene.add(group);
             return group;
@@ -175,12 +247,18 @@ export class SceneManager {
      * Update the position of a mesh based on a physics body
      * @param {THREE.Object3D} mesh - The mesh to update
      * @param {Object} position - Position as {x, y, z}
+     * @param {Object} rotation - Rotation in radians (optional)
      */
-    updateMeshPosition(mesh, position) {
+    updateMeshPosition(mesh, position, rotation = null) {
         if (!mesh) return;
         
         try {
             mesh.position.set(position.x, position.y, position.z);
+            
+            // Update rotation if provided
+            if (rotation) {
+                mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+            }
         } catch (error) {
             console.error('Failed to update mesh position:', error);
         }
@@ -189,12 +267,45 @@ export class SceneManager {
     /**
      * Update the camera to follow a target
      * @param {Object} position - Target position as {x, y, z}
+     * @param {Object} direction - Movement direction (for third-person camera)
      */
-    updateCameraTarget(position) {
+    updateCameraTarget(position, direction = { x: 0, z: -1 }) {
         try {
-            // Update orbit controls target
-            this.controls.target.set(position.x, position.y, position.z);
-            this.controls.update();
+            // Update the target position for third-person camera
+            this.thirdPersonCamera.target.set(position.x, position.y, position.z);
+            
+            if (this.cameraMode === 'orbit') {
+                // Update orbit controls target
+                this.controls.target.set(position.x, position.y, position.z);
+                this.controls.update();
+            } else if (this.cameraMode === 'third-person') {
+                // Calculate camera position based on character position and direction
+                const directionLength = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+                
+                // Only update rotation angle if we're actually moving
+                if (directionLength > 0.1) {
+                    // Calculate the angle from the direction vector
+                    this.thirdPersonCamera.rotationAngle = Math.atan2(direction.x, direction.z);
+                }
+                
+                // Calculate camera position based on distance and angle
+                const cameraX = position.x - Math.sin(this.thirdPersonCamera.rotationAngle) * this.thirdPersonCamera.distance;
+                const cameraZ = position.z - Math.cos(this.thirdPersonCamera.rotationAngle) * this.thirdPersonCamera.distance;
+                const cameraY = position.y + this.thirdPersonCamera.height;
+                
+                // Apply smoothing to camera movement
+                this.camera.position.x += (cameraX - this.camera.position.x) * this.thirdPersonCamera.smoothing;
+                this.camera.position.y += (cameraY - this.camera.position.y) * this.thirdPersonCamera.smoothing;
+                this.camera.position.z += (cameraZ - this.camera.position.z) * this.thirdPersonCamera.smoothing;
+                
+                // Look at the target (slightly above the character)
+                const lookAtTarget = new THREE.Vector3(
+                    position.x, 
+                    position.y + this.thirdPersonCamera.offset.y, 
+                    position.z
+                );
+                this.camera.lookAt(lookAtTarget);
+            }
         } catch (error) {
             console.error('Failed to update camera target:', error);
         }
