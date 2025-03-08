@@ -57,12 +57,17 @@ class Application {
         
         const position = this.character.getPosition();
         const state = this.character.getState();
+        const direction = this.character.getDirection();
+        const rotation = this.character.getRotation();
         
         this.debugElement.innerHTML = `
             Position: X=${position.x.toFixed(2)}, Y=${position.y.toFixed(2)}, Z=${position.z.toFixed(2)}<br>
+            Rotation: Y=${(rotation.y * 180 / Math.PI).toFixed(2)}°<br>
+            Direction: X=${direction.x.toFixed(2)}, Z=${direction.z.toFixed(2)}<br>
             Grounded: ${state.isGrounded}<br>
             Jumping: ${state.isJumping}<br>
             Mode: ${this.usingFallback ? 'Fallback' : 'Physics'}<br>
+            Camera: ${this.scene.cameraMode}<br>
             FPS: ${(1 / (this.deltaTime || 0.016)).toFixed(0)}
         `;
     }
@@ -179,12 +184,18 @@ class Application {
                 
                 this.character.update(this.input, this.deltaTime);
                 
-                // Update character mesh position
+                // Update character mesh position and rotation
                 const characterPosition = this.character.getPosition();
-                this.scene.updateMeshPosition(this.characterMesh, characterPosition);
+                const characterRotation = this.character.getRotation();
+                this.scene.updateMeshPosition(
+                    this.characterMesh, 
+                    characterPosition,
+                    characterRotation
+                );
                 
                 // Update camera to follow character
-                this.scene.updateCameraTarget(characterPosition);
+                const characterDirection = this.character.getDirection();
+                this.scene.updateCameraTarget(characterPosition, characterDirection);
             }
             
             // Update debug info
@@ -240,4 +251,5 @@ app.init().catch(error => {
 console.log('Controls:');
 console.log('W, A, S, D - Move');
 console.log('Space - Jump');
-console.log('Mouse - Rotate camera');
+console.log('C - Toggle camera mode');
+console.log('Mouse - Rotate camera (in orbit mode)');
