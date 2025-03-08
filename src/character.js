@@ -27,6 +27,9 @@ export class CharacterController {
             position: { x: 0, y: 1, z: 0 } // Fallback position
         };
 
+        // Flag to track if we're using fallback movement
+        this.usingFallback = true; // Start with fallback, switch if physics works
+        
         // Create the character physics body
         try {
             this.character = this.physics.createCharacter(
@@ -34,14 +37,20 @@ export class CharacterController {
                 0.5,  // radius
                 1.0   // height
             );
+            
+            // Check if we got a valid character back
+            if (this.character && this.character.body && 
+                typeof this.character.body.translation === 'function') {
+                this.usingFallback = false;
+                console.log('Using physics-based character movement');
+            } else {
+                console.warn('Invalid character body, using fallback movement');
+            }
         } catch (error) {
             console.error('Failed to create character physics body:', error);
             this.character = null;
             // We'll use the fallback position system instead
         }
-
-        // Flag to track if we're using fallback movement
-        this.usingFallback = !this.character || !this.character.body;
         
         if (this.usingFallback) {
             console.warn('Using fallback character movement system');
