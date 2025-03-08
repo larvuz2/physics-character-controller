@@ -65,7 +65,25 @@ Open your browser and navigate to `http://localhost:3000` (or the URL shown in y
 
 ## Deployment
 
-This project is set up for easy deployment to Netlify. Simply connect your GitHub repository to Netlify, and it will automatically build and deploy the site.
+This project is set up for easy deployment to Netlify:
+
+1. Fork or clone this repository
+2. Connect your GitHub repository to Netlify
+3. Use the following build settings:
+   - Build command: `npm install && npm run build`
+   - Publish directory: `dist`
+4. Deploy the site
+
+The project includes a `netlify.toml` file that configures the build process and redirects for the single-page application.
+
+## WebAssembly Support
+
+This project uses WebAssembly for the Rapier physics engine. The build process is configured to handle WASM files correctly using:
+
+- vite-plugin-wasm
+- vite-plugin-top-level-await
+
+These plugins are automatically installed and configured in the build process.
 
 ## How It Works
 
