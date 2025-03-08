@@ -117,13 +117,27 @@
             align-self: center;
             touch-action: manipulation;
         }
+        .camera-button {
+            width: 50px;
+            height: 50px;
+            border-radius: 5px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            align-self: flex-end;
+            touch-action: manipulation;
+        }
     </style>
 </head>
 <body>
     <div id="info">
         WASD - Move<br>
         SPACE - Jump<br>
-        MOUSE - Rotate camera
+        C - Toggle Camera<br>
+        MOUSE - Rotate Camera (Orbit Mode)
     </div>
     
     <div id="status">
@@ -151,7 +165,10 @@
             <button class="control-button" id="btn-down" style="grid-area: 2 / 2 / 3 / 3;">S</button>
             <button class="control-button" id="btn-right" style="grid-area: 2 / 3 / 3 / 4;">D</button>
         </div>
-        <button class="jump-button" id="btn-jump">JUMP</button>
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <button class="jump-button" id="btn-jump">JUMP</button>
+            <button class="camera-button" id="btn-camera">C</button>
+        </div>
     </div>
     
     <script type="module">
@@ -252,7 +269,8 @@
                 'btn-down': { key: 'KeyS', action: 'backward' },
                 'btn-left': { key: 'KeyA', action: 'left' },
                 'btn-right': { key: 'KeyD', action: 'right' },
-                'btn-jump': { key: 'Space', action: 'jump' }
+                'btn-jump': { key: 'Space', action: 'jump' },
+                'btn-camera': { key: 'KeyC', action: 'camera' }
             };
             
             // Create synthetic keyboard events
@@ -263,7 +281,8 @@
                                 keyCode === 'KeyS' ? 83 :
                                 keyCode === 'KeyA' ? 65 :
                                 keyCode === 'KeyD' ? 68 :
-                                keyCode === 'Space' ? 32 : 0;
+                                keyCode === 'Space' ? 32 :
+                                keyCode === 'KeyC' ? 67 : 0;
                 return event;
             };
             
